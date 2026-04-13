@@ -1,0 +1,329 @@
+============================================================
+SYSTEM REQUIREMENTS DOCUMENT (SRD)
+Golden Governor v125 Light – Solana Playground Edition
+Level A Safety-Critical Requirements
+============================================================
+
+1. INTRODUCTION
+------------------------------------------------------------
+1.1 Purpose
+This System Requirements Document (SRD) defines all functional,
+safety, integrity, timing, oracle, and operational requirements for
+the Golden Governor v125 Light program deployed on Solana Devnet.
+
+1.2 Scope
+Golden Governor v125 Light is an on-chain safety governor that
+enforces deterministic constraints on leverage, exposure, drawdown,
+oracle integrity, MEV detection, and temporal sequencing for a
+trading strategy. It operates as a safety kernel and gatekeeper.
+
+1.3 Assurance Level
+This SRD is written to Level A rigor (NASA-style), meaning:
+- No single failure may lead to uncontrolled behavior.
+- All requirements are testable, traceable, and deterministic.
+- All safety-critical logic must be explicitly defined.
+
+1.4 Definitions
+- Governor: The on-chain state machine enforcing safety.
+- Authority: The signer controlling this governor instance.
+- PDA: Program Derived Address storing governor state.
+- Mode: Operational state (Normal, Degraded, Recovering, Lockout).
+- Integrity Hash: Zero-trust state validation checksum.
+
+============================================================
+2. SYSTEM OVERVIEW
+------------------------------------------------------------
+The system consists of:
+- A single Anchor program (golden_governor)
+- A PDA storing GoldenGovernor state
+- Oracle inputs from two independent feeds
+- A zero-trust integrity verification subsystem
+- A mode-based safety envelope
+- A watchdog subsystem for anomaly detection
+
+============================================================
+3. FUNCTIONAL REQUIREMENTS
+------------------------------------------------------------
+
+3.1 Initialization Requirements
+--------------------------------
+GG-REQ-001:
+The system SHALL create a GoldenGovernor PDA using seeds:
+[b"governor", authority_pubkey].
+
+GG-REQ-002:
+The system SHALL initialize all state fields to valid defaults,
+including:
+- mode = Normal
+- peak_equity = initial_equity
+- current_drawdown = 0
+- integrity_salt = current slot
+
+GG-REQ-003:
+The system SHALL enforce:
+max_drawdown_bps ≤ MAX_DRAWDOWN_BPS_MAX.
+
+GG-REQ-004:
+If max_drawdown_bps > DEFAULT_MAX_DRAWDOWN_BPS,
+the system SHALL clamp it to DEFAULT_MAX_DRAWDOWN_BPS.
+
+GG-REQ-005:
+The system SHALL compute and store an integrity_hash after initialization.
+
+3.2 Trade Execution Requirements
+--------------------------------
+GG-REQ-010:
+The system SHALL verify zero-trust integrity via zt_lite_verify
+before processing a trade.
+
+GG-REQ-011:
+The system SHALL load two oracle prices and validate:
+- feed pubkeys match expected
+- data age ≤ MAXIMUM_AGE
+- price ≥ 0
+
+GG-REQ-012:
+The system SHALL compute cross-feed difference in basis points and
+REJECT the trade if:
+diff_bps > CROSS_CHECK_MAX_DIFF_BPS.
+
+GG-REQ-013:
+The system SHALL compute MEV spike detection and REJECT the trade if:
+price_change_bps > MEV_MAX_PRICE_CHANGE_BPS.
+
+GG-REQ-014:
+The system SHALL compute friction bound:
+expected_spread * 1.618
+and REJECT the trade if slippage exceeds this bound.
+
+GG-REQ-015:
+The system SHALL enforce:
+leverage_used ≤ max_leverage.
+
+GG-REQ-016:
+The system SHALL enforce:
+new_equity ≤ max_exposure.
+
+GG-REQ-017:
+The system SHALL update:
+- current_equity
+- peak_equity (if increased)
+- current_drawdown
+- mode (Normal/Degraded/Recovering/Lockout)
+- last_price
+- last_action_slot
+- last_sense_timestamp
+
+GG-REQ-018:
+If drawdown_bps ≥ max_drawdown_bps,
+the system SHALL enter Lockout mode.
+
+3.3 Risk Tick Requirements
+---------------------------
+GG-REQ-030:
+The system SHALL enforce slot-based rate limiting:
+current_slot ≥ last_risk_tick_slot + MIN_SLOTS_BETWEEN_RISK_TICKS.
+
+GG-REQ-031:
+The system SHALL recompute drawdown and update mode accordingly.
+
+GG-REQ-032:
+The system SHALL update:
+- last_risk_tick_slot
+- last_action_slot
+- last_sense_timestamp
+- integrity_hash
+
+3.4 Watchdog Tick Requirements
+-------------------------------
+GG-REQ-040:
+The system SHALL enforce slot-based rate limiting identical to risk_tick.
+
+GG-REQ-041:
+The system SHALL increment watchdog_nonce and REJECT if:
+new_nonce ≤ old_nonce.
+
+GG-REQ-042:
+The system SHALL compute oracle move in basis points and enter Lockout if:
+percent_move > 2000 bps.
+
+GG-REQ-043:
+The system SHALL recompute integrity_hash and enter Lockout if:
+computed_hash ≠ stored_hash AND stored_hash ≠ 0.
+
+3.5 Withdrawal Requirements
+----------------------------
+GG-REQ-050:
+The system SHALL enforce withdrawal lock:
+current_time - init_timestamp ≥ WITHDRAWAL_LOCK_SECONDS.
+
+GG-REQ-051:
+The system SHALL allow withdrawals ONLY in Normal mode.
+
+GG-REQ-052:
+The system SHALL enforce:
+amount ≤ current_equity.
+
+GG-REQ-053:
+The system SHALL update:
+- current_equity
+- last_action_slot
+- integrity_hash
+
+3.6 Phoenix Restart Requirements
+---------------------------------
+GG-REQ-060:
+The system SHALL allow phoenix_restart ONLY in Lockout mode.
+
+GG-REQ-061:
+The system SHALL enforce cooldown:
+current_time - lockout_timestamp ≥ PHOENIX_COOLDOWN_SECONDS.
+
+GG-REQ-062:
+The system SHALL transition to Recovering mode and reset:
+- current_drawdown = 0
+- peak_equity = current_equity
+
+GG-REQ-063:
+The system SHALL update integrity_hash.
+
+3.7 Policy Upgrade Requirements
+--------------------------------
+GG-REQ-070:
+The system SHALL require zero-trust verification with allow_lockout = true.
+
+GG-REQ-071:
+The system SHALL enforce:
+new_version > current policy_version.
+
+GG-REQ-072:
+The system SHALL update:
+- policy_version
+- integrity_hash
+
+============================================================
+4. SAFETY REQUIREMENTS
+------------------------------------------------------------
+
+4.1 Oracle Safety
+------------------
+GG-SAF-001:
+The system SHALL reject any oracle feed whose pubkey does not match
+the expected feed ID.
+
+GG-SAF-002:
+The system SHALL reject any oracle update older than MAXIMUM_AGE.
+
+GG-SAF-003:
+The system SHALL reject any oracle price < 0.
+
+4.2 MEV and Market Safety
+--------------------------
+GG-SAF-010:
+The system SHALL reject trades if price movement exceeds
+MEV_MAX_PRICE_CHANGE_BPS.
+
+GG-SAF-011:
+The system SHALL reject trades if slippage exceeds:
+expected_spread * 1.618.
+
+4.3 Drawdown Safety
+--------------------
+GG-SAF-020:
+The system SHALL compute drawdown as:
+(peak_equity - current_equity) / peak_equity * 10,000.
+
+GG-SAF-021:
+The system SHALL enter Lockout if:
+drawdown_bps ≥ max_drawdown_bps.
+
+4.4 Integrity Safety
+---------------------
+GG-SAF-030:
+The system SHALL compute integrity_hash after every state change.
+
+GG-SAF-031:
+The system SHALL reject operations if:
+computed_hash ≠ stored_hash AND stored_hash ≠ 0.
+
+GG-SAF-032:
+The system SHALL enter Lockout if watchdog detects integrity mismatch.
+
+4.5 Temporal Safety
+--------------------
+GG-SAF-040:
+The system SHALL reject operations if:
+elapsed_time > 3 seconds (SafetyKernelTimeout).
+
+GG-SAF-041:
+The system SHALL enforce slot-based rate limits for:
+- risk_tick
+- watchdog_tick
+
+============================================================
+5. PERFORMANCE REQUIREMENTS
+------------------------------------------------------------
+
+GG-PERF-001:
+All instructions SHALL complete within Solana’s compute budget.
+
+GG-PERF-002:
+All integrity checks SHALL use constant-time or near-constant-time
+operations to avoid timing side channels.
+
+GG-PERF-003:
+All arithmetic SHALL use checked math to prevent overflow.
+
+============================================================
+6. RELIABILITY REQUIREMENTS
+------------------------------------------------------------
+
+GG-REL-001:
+No single oracle failure SHALL cause unsafe behavior.
+
+GG-REL-002:
+No single state mutation SHALL bypass integrity_hash verification.
+
+GG-REL-003:
+Lockout mode SHALL halt all operations except:
+- phoenix_restart
+- upgrade_policy (with allow_lockout)
+
+============================================================
+7. EVENT AND TELEMETRY REQUIREMENTS
+------------------------------------------------------------
+
+GG-EVT-001:
+The system SHALL emit GovernorStateChanged on:
+- mode change
+- equity change
+- drawdown change
+- integrity_hash update
+
+GG-EVT-002:
+The system SHALL emit EnvelopeViolation on:
+- oracle cross-check failure
+- MEV spike
+- integrity mismatch
+- lockout triggers
+
+============================================================
+8. VERIFICATION REQUIREMENTS
+------------------------------------------------------------
+
+GG-VRF-001:
+Each requirement SHALL be verifiable via:
+- direct code inspection
+- unit tests
+- integration tests
+- event inspection
+- simulated oracle inputs
+
+GG-VRF-002:
+Each requirement SHALL map to at least one test case in the
+Traceability Matrix.
+
+============================================================
+END OF SYSTEM REQUIREMENTS DOCUMENT (SRD)
+============================================================
+
