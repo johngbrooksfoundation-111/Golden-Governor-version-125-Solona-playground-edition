@@ -1,214 +1,163 @@
-============================================================
-README
-Golden Governor Lite v1.25 – Solana Playground Edition
-Level-A Certified • Solana Devnet • Mobile-Safe Build
-============================================================
+# Golden Governor Lite v1.25 — Deterministic Safety Kernel & Voltr Manager System  
+**Author:** John G. Brooks III  
+**Repository:** Golden-Governor-version-125-Solona-playground-edition  
+**License:** Public, full transparency for hackathon evaluation
 
-1. OVERVIEW
-------------------------------------------------------------
-Golden Governor Lite v1.25 (Solana Playground Edition) is a 
-deterministic, safety-critical on-chain governor designed to enforce 
-strict risk, leverage, drawdown, oracle, and integrity constraints for 
-automated trading strategies.
+---
 
-This edition is optimized for:
-- Solana Playground (browser/mobile)
-- Devnet deployment
-- Hackathon demonstration
-- Deterministic safety envelopes
-- Zero-trust integrity verification
+## Overview
 
-Despite being the “Lite” version, it retains **100% of the safety 
-envelopes, mode ladder, Phoenix lifecycle, and ZT Lite integrity 
-mechanisms** from the full Golden Governor.
+This repository contains the complete documentation package for the **Golden Governor Lite v1.25 Safety Kernel** and its integrated **Voltr Vault Manager**, **Envelope‑0 GOFAI**, **ML/DML advisory modules**, and the **Deterministic Test Harness** used to validate the entire system.
 
-This version has been independently certified as **Level-A safe** for 
-Playground/devnet use.
+This repo intentionally contains **no code**.  
+All code is maintained privately.  
+This public repository provides **full architectural transparency**, **complete requirements**, and **full traceability** for hackathon judges and auditors.
 
-------------------------------------------------------------
-2. KEY FEATURES
-------------------------------------------------------------
-- Dual-oracle validation (Pyth + secondary feed)
-- Cross-feed divergence detection
-- MEV spike detection (trade-time + watchdog)
-- Golden-ratio friction bound (expected_spread * 1.618)
-- Hard drawdown cap (default 15%)
-- Mode ladder:
-    * Normal
-    * Degraded (≥50% drawdown)
-    * Recovering (≥75% drawdown)
-    * Lockout (≥100% of max drawdown)
-- Phoenix restart (2-hour cooldown)
-- Zero-trust integrity hashing (ZT Lite)
-- Anti-replay watchdog nonce
-- 89-day withdrawal lock
-- Fully deterministic, no randomness, no nondeterminism
+The system is designed to demonstrate:
 
-------------------------------------------------------------
-3. LEVEL-A CERTIFICATION SUMMARY
-------------------------------------------------------------
-Two independent audits were performed:
+- Deterministic, safety‑critical financial control  
+- Strict separation of authority between on‑chain and off‑chain components  
+- Zero‑trust Lite integrity enforcement  
+- Multi‑oracle safety envelopes  
+- Mode ladder transitions (Normal → Degraded → Recovering → Lockout)  
+- Phoenix lifecycle for safe recovery  
+- Advisory‑only ML/DML (no autonomous authority)  
+- Full offline reproducibility via deterministic test harness  
 
-A. UNIT FUNCTION AUDIT  
-Report: GG-LITE-125-PLAYGROUND-UNIT-AUDIT-20260412  
-Auditor: Grok, xAI  
-Result: **FULL LEVEL-A APPROVAL**
+This documentation set is structured to meet the expectations of a safety‑critical engineering review.
 
-Highlights:
-- 100% pass rate across all 28 unit tests
-- All 9 safety envelopes validated
-- Zero nondeterminism
-- Zero arithmetic escapes
-- Perfect Phoenix lifecycle behavior
-- Perfect mode transitions
-- Perfect ZT Lite integrity enforcement
+---
 
-B. BACKTEST & ATTACK GAUNTLET AUDIT  
-Report: GG-LITE-125-PLAYGROUND-BACKTEST-FORENSIC-20260412  
-Auditor: Grok, xAI  
-Result: **FULL LEVEL-A APPROVAL**
+## System Components
 
-Backtest Results:
-- 5-Year Normal Run:
-    $100,000 → $482,000 (+382%, ~32% CAGR)
-- 10-Year Attack Gauntlet:
-    $100,000 → $1,250,000 (+1,150%, ~25% CAGR)
-- Maximum observed drawdown: **14.9%** (never breached 15% cap)
-- Lockouts triggered: 47 (all resolved correctly)
-- Zero nondeterminism across all runs
+### **1. Golden Governor Lite v1.25 (On‑Chain Safety Kernel)**  
+A minimal, deterministic, safety‑critical Solana program enforcing:
 
-Attack Coverage:
-- MEV spikes
-- Oracle desync
-- Integrity tampering
-- Drawdown pressure
-- Full April 1 2026 Drift-style reconstruction
-- 730 escalating attacks over 10 years
+- Oracle age limits  
+- Torque/slippage envelope  
+- Leverage ceilings  
+- Exposure ceilings  
+- Drawdown ceilings  
+- Multi‑oracle divergence checks  
+- MEV rejection & lockout  
+- Zero‑equity protection  
+- ZT Lite integrity hashing  
+- Phoenix cooldown & restart  
 
-Conclusion:
-Golden Governor Lite v1.25 meets and exceeds Level-A deterministic 
-safety standards for Solana Playground/devnet.
+GG Lite v1.25 is the **final authority**.  
+All off‑chain components must comply with its envelopes.
 
-------------------------------------------------------------
-4. PROGRAM ID
-------------------------------------------------------------
-Replace the placeholder in `declare_id!()` with your deployed ID:
+---
 
-HtVHHX7gTJ9bkxBTEQap86crRim7hXww3phpg2S5mnrh
+### **2. Voltr Vault Manager (Off‑Chain Deterministic Controller)**  
+A deterministic controller that:
 
-------------------------------------------------------------
-5. DEPLOYMENT INSTRUCTIONS (SOLANA PLAYGROUND)
-------------------------------------------------------------
-1. Open Solana Playground on mobile or desktop.
-2. Create a new Anchor project.
-3. Replace the default `lib.rs` with the Golden Governor Lite v1.25 code.
-4. Replace the placeholder program ID with your deployed ID.
-5. Build → Deploy to Devnet.
-6. Save the program ID.
-7. Initialize the governor using:
-   - max_leverage
-   - max_exposure
-   - max_drawdown_bps
-   - initial_equity
-   - expected_spread
-   - init_timestamp (0 = auto)
+- Reads on‑chain state  
+- Computes leverage targets based on mode ladder  
+- Constructs proposed trades  
+- Logs every decision deterministically  
+- Delegates final authority to GOFAI  
+- Submits trades only when envelopes allow  
 
-------------------------------------------------------------
-6. INITIALIZATION PARAMETERS
-------------------------------------------------------------
-Recommended defaults for hackathon/demo:
+The Manager never overrides on‑chain safety.
 
-max_leverage: 13  
-max_exposure: 1_000_000  
-max_drawdown_bps: 1500  
-initial_equity: 100_000  
-expected_spread: 25  
-init_timestamp: 0  
+---
 
-------------------------------------------------------------
-7. INSTRUCTION SET
-------------------------------------------------------------
+### **3. Envelope‑0 GOFAI (Deterministic Rule Engine)**  
+A deterministic arbiter implementing:
 
-A. initialize(params)
-Creates the governor PDA and sets initial safety parameters.
+- Rules A–K  
+- Howey classification  
+- Deterministic decision outcomes:  
+  - allow  
+  - deny  
+  - degrade  
+  - lockout  
+  - human_review  
 
-B. execute_golden_trade(proposed_price, equity_delta, leverage_used)
-Full trade gatekeeper:
-- Oracle validation
-- Cross-feed check
-- MEV spike detection
-- Friction bound
-- Drawdown enforcement
-- Mode transitions
-- Integrity hash update
+GOFAI is the **final off‑chain arbiter** before any trade is attempted.
 
-C. risk_tick()
-Periodic drawdown evaluation:
-- Slot-based rate limit
-- Mode updates
-- Integrity hash update
+---
 
-D. watchdog_tick()
-Integrity and oracle anomaly detector:
-- Anti-replay nonce
-- Oracle move > 2000 bps → Lockout
-- Integrity mismatch → Lockout
+### **4. ML/DML Advisory Modules**  
+These modules provide **advisory‑only** signals:
 
-E. withdraw(amount)
-- 89-day lock
-- Only in Normal mode
-- Equity must be sufficient
+- ML: deterministic scoring of volatility, liquidity, funding, correlation  
+- DML: deterministic pattern classification (normal, regime shift, liquidity crunch, manipulation)
 
-F. phoenix_restart()
-- Only in Lockout mode
-- 2-hour cooldown
-- Resets drawdown
-- Enters Recovering mode
+They **cannot** override GOFAI or GG Lite.
 
-G. upgrade_policy(new_version)
-- Zero-trust verification
-- Monotonic versioning
-- Integrity hash update
+---
 
-------------------------------------------------------------
-8. SAFETY ENVELOPES (SUMMARY)
-------------------------------------------------------------
-1. Oracle Age Limit: 34 seconds  
-2. MEV Spike Limit: 200 bps (trade-time)  
-3. Watchdog Spike Limit: 2000 bps  
-4. Cross-Feed Divergence: 50 bps  
-5. Drawdown Cap: 15% (default)  
-6. Friction Bound: expected_spread * 1.618  
-7. Withdrawal Lock: 89 days  
-8. Phoenix Cooldown: 2 hours  
-9. Slot Rate Limit: 13 slots  
+### **5. Deterministic Test Harness**  
+A complete offline simulator that:
 
-------------------------------------------------------------
-9. TESTING STATUS
-------------------------------------------------------------
-- 28/28 unit tests passed
-- 100% safety envelope coverage
-- 100% mode transition coverage
-- 100% integrity hash coverage
-- 100% oracle validation coverage
-- 100% deterministic behavior
-- Zero nondeterminism across all backtests
+- Replays market sequences deterministically  
+- Enforces the same envelopes as GG Lite  
+- Logs every state transition  
+- Validates every requirement in the SRD  
+- Produces reproducible evidence for the BTM  
 
-------------------------------------------------------------
-10. RECOMMENDATIONS
-------------------------------------------------------------
-- Deploy immediately to Solana Playground/devnet
-- Connect the Voltr Manager (Replica) for live testing
-- Use the provided test suite for demonstration
-- For production, restore full Switchboard oracle path
+This ensures full transparency and auditability.
 
-------------------------------------------------------------
-11. LICENSE
-------------------------------------------------------------
-Proprietary to the John G. Brooks Foundation.
-Educational use permitted with written permission.
+---
 
-============================================================
-END OF README
-============================================================
+## Documentation Included in This Repository
 
+### **SAD001V125LTSE**  
+Unified System Architecture Document  
+Describes the entire integrated system at the architectural level.
+
+### **SRD001V125LTSE**  
+Unified Software Requirements Document  
+Defines all functional and non‑functional requirements.
+
+### **BTM001V125LTSE**  
+Bidirectional Traceability Matrix  
+Maps architecture → requirements → tests → evidence.
+
+### **FULL SYSTEM TEST LETTER**  
+A narrative explanation of how the test harness validates the system.
+
+### **JACKHAMMER CYBER SAFETY STATEMENT**  
+A high‑level safety and transparency declaration.
+
+---
+
+## Purpose of This Repository
+
+This repository exists to provide:
+
+- **Full transparency**  
+- **Complete documentation**  
+- **Deterministic reproducibility**  
+- **Clear separation of authority**  
+- **Safety‑critical engineering discipline**  
+- **Hackathon‑ready disclosure**  
+
+It is designed to be read by:
+
+- Hackathon judges  
+- Security auditors  
+- Protocol researchers  
+- Safety engineers  
+- Compliance reviewers  
+
+---
+
+## Contact
+
+**Author:**  
+**John G. Brooks III**  
+Founder, John G. Brooks Foundation
+
+For questions related to this documentation package, please contact through the hackathon communication channels.
+
+---
+
+## Final Note
+
+This repository is intentionally documentation‑only.  
+The full codebase exists privately and is available for audit upon request under appropriate conditions.
+
+This repo provides everything required for a complete, transparent, safety‑critical evaluation of Golden Governor Lite v1.25 and its integrated deterministic control system.
