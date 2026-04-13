@@ -1,0 +1,296 @@
+============================================================
+BI-DIRECTIONAL TRACEABILITY MATRIX (BTM)
+Golden Governor v125 Light – Solana Playground Edition
+Level A Safety-Critical Traceability
+============================================================
+
+LEGEND:
+REQ = Requirement ID (from SRD)
+DES = Design Element (from SAD)
+CODE = Code Location (function, struct, or logic block)
+TEST = Verification Method (unit test, integration test, event, error)
+
+============================================================
+1. INITIALIZATION TRACEABILITY
+============================================================
+
+REQ: GG-REQ-001
+DES: Governor PDA creation using seeds
+CODE: initialize() → #[account(init, seeds=[b"governor", user])]
+TEST: PDA derivation test; account creation success
+
+REQ: GG-REQ-002
+DES: Default state initialization
+CODE: initialize() sets mode=Normal, peak_equity, drawdown=0
+TEST: State inspection after init; GovernorStateChanged event
+
+REQ: GG-REQ-003
+DES: max_drawdown_bps ≤ MAX_DRAWDOWN_BPS_MAX
+CODE: require!(params.max_drawdown_bps <= MAX_DRAWDOWN_BPS_MAX)
+TEST: Boundary tests; invalid parameter rejection
+
+REQ: GG-REQ-004
+DES: Clamp drawdown to DEFAULT_MAX_DRAWDOWN_BPS
+CODE: effective_drawdown logic in initialize()
+TEST: Input > default; verify stored value
+
+REQ: GG-REQ-005
+DES: Compute integrity_hash after init
+CODE: governor.integrity_hash = 0 initially; updated after events
+TEST: Hash non-zero after first state change
+
+============================================================
+2. TRADE EXECUTION TRACEABILITY
+============================================================
+
+REQ: GG-REQ-010
+DES: Zero-trust verification
+CODE: execute_golden_trade() → zt_lite_verify()
+TEST: Integrity mismatch → ZTVerificationFailed
+
+REQ: GG-REQ-011
+DES: Oracle validation (pubkey, age, non-negative)
+CODE: get_pyth_price()
+TEST: Invalid pubkey; stale data; negative price
+
+REQ: GG-REQ-012
+DES: Cross-feed difference check
+CODE: price_diff_bps > CROSS_CHECK_MAX_DIFF_BPS
+TEST: Inject mismatched oracle values → OracleCrossCheckFailed
+
+REQ: GG-REQ-013
+DES: MEV spike detection
+CODE: price_change_bps > MEV_MAX_PRICE_CHANGE_BPS
+TEST: Simulated spike → MEVPriceSpike
+
+REQ: GG-REQ-014
+DES: Friction bound using expected_spread * 1.618
+CODE: max_friction = expected_spread * 1618 / 1000
+TEST: Slippage > bound → MechanicalTorqueSlip
+
+REQ: GG-REQ-015
+DES: Leverage enforcement
+CODE: require!(leverage_used <= max_leverage)
+TEST: leverage_used > max → LeverageLimitExceeded
+
+REQ: GG-REQ-016
+DES: Exposure enforcement
+CODE: require!(new_equity_u64 <= max_exposure)
+TEST: new_equity > max_exposure → ExposureLimitExceeded
+
+REQ: GG-REQ-017
+DES: State updates after trade
+CODE: Updates to equity, peak_equity, drawdown, mode, timestamps
+TEST: State inspection; GovernorStateChanged event
+
+REQ: GG-REQ-018
+DES: Lockout on max drawdown breach
+CODE: if drawdown_bps >= max_drawdown_bps → Lockout
+TEST: Trigger drawdown breach → LockoutMode
+
+============================================================
+3. RISK TICK TRACEABILITY
+============================================================
+
+REQ: GG-REQ-030
+DES: Slot-based rate limiting
+CODE: require!(slot >= last_risk_tick_slot + MIN_SLOTS)
+TEST: Too-soon call → RateLimitExceeded
+
+REQ: GG-REQ-031
+DES: Drawdown recomputation and mode update
+CODE: risk_tick() drawdown logic
+TEST: Mode transitions at 50% and 75%
+
+REQ: GG-REQ-032
+DES: State updates and integrity hash
+CODE: Updates timestamps, hash, mode
+TEST: GovernorStateChanged event
+
+============================================================
+4. WATCHDOG TRACEABILITY
+============================================================
+
+REQ: GG-REQ-040
+DES: Slot-based rate limiting
+CODE: watchdog_tick() same check as risk_tick()
+TEST: Too-soon call → RateLimitExceeded
+
+REQ: GG-REQ-041
+DES: Anti-replay nonce
+CODE: new_nonce > old_nonce
+TEST: Replay attempt → WatchdogNonceReplay
+
+REQ: GG-REQ-042
+DES: Oracle move > 2000 bps triggers Lockout
+CODE: percent_move > 2000
+TEST: Inject large oracle jump → Lockout
+
+REQ: GG-REQ-043
+DES: Integrity mismatch triggers Lockout
+CODE: computed != integrity_hash
+TEST: Corrupt state → EnvelopeViolation(0)
+
+============================================================
+5. WITHDRAWAL TRACEABILITY
+============================================================
+
+REQ: GG-REQ-050
+DES: 89-day withdrawal lock
+CODE: time_since_init >= WITHDRAWAL_LOCK_SECONDS
+TEST: Early withdrawal → WithdrawalLocked
+
+REQ: GG-REQ-051
+DES: Withdrawal allowed only in Normal mode
+CODE: require!(mode == Normal)
+TEST: Degraded/Recovering/Lockout → WithdrawalModeViolation
+
+REQ: GG-REQ-052
+DES: amount ≤ current_equity
+CODE: require!(amount <= current_equity)
+TEST: Excess withdrawal → InsufficientEquity
+
+REQ: GG-REQ-053
+DES: State update and integrity hash
+CODE: current_equity -= amount; update hash
+TEST: GovernorStateChanged event
+
+============================================================
+6. PHOENIX RESTART TRACEABILITY
+============================================================
+
+REQ: GG-REQ-060
+DES: Only allowed in Lockout mode
+CODE: require!(mode == Lockout)
+TEST: Normal/Degraded/Recovering → PhoenixNotInLockout
+
+REQ: GG-REQ-061
+DES: 2-hour cooldown
+CODE: elapsed >= PHOENIX_COOLDOWN_SECONDS
+TEST: Early restart → PhoenixCooldownNotElapsed
+
+REQ: GG-REQ-062
+DES: Reset drawdown; set Recovering mode
+CODE: current_drawdown=0; mode=Recovering
+TEST: State inspection
+
+REQ: GG-REQ-063
+DES: Update integrity hash
+CODE: compute_integrity_hash()
+TEST: Hash change verified
+
+============================================================
+7. POLICY UPGRADE TRACEABILITY
+============================================================
+
+REQ: GG-REQ-070
+DES: Zero-trust verification with allow_lockout=true
+CODE: zt_lite_verify(governor, authority, true)
+TEST: Integrity mismatch → ZTVerificationFailed
+
+REQ: GG-REQ-071
+DES: new_version > old_version
+CODE: require!(new_version > policy_version)
+TEST: Same or lower version → InvalidParameter
+
+REQ: GG-REQ-072
+DES: Update policy_version and integrity_hash
+CODE: governor.policy_version = new_version
+TEST: State inspection; GovernorStateChanged event
+
+============================================================
+8. SAFETY REQUIREMENTS TRACEABILITY
+============================================================
+
+REQ: GG-SAF-001
+DES: Oracle pubkey validation
+CODE: require!(price_update.key() == expected_feed)
+TEST: Wrong feed → OracleFeedIdInvalid
+
+REQ: GG-SAF-002
+DES: Max age enforcement
+CODE: get_price_no_older_than()
+TEST: Stale feed → SafetyKernelTimeout
+
+REQ: GG-SAF-003
+DES: Non-negative price
+CODE: require!(pyth_price.price >= 0)
+TEST: Negative price → OracleNegativePrice
+
+REQ: GG-SAF-010
+DES: MEV spike detection
+CODE: price_change_bps > MEV_MAX_PRICE_CHANGE_BPS
+TEST: Spike → MEVPriceSpike
+
+REQ: GG-SAF-011
+DES: Slippage bound
+CODE: price_diff <= max_friction
+TEST: Excess slippage → MechanicalTorqueSlip
+
+REQ: GG-SAF-020
+DES: Drawdown computation
+CODE: numerator/denominator * 10,000
+TEST: Correct BPS calculation
+
+REQ: GG-SAF-021
+DES: Lockout on max drawdown
+CODE: drawdown_bps >= max_drawdown_bps
+TEST: LockoutMode
+
+REQ: GG-SAF-030
+DES: Integrity hash update
+CODE: compute_integrity_hash()
+TEST: Hash changes after state mutation
+
+REQ: GG-SAF-031
+DES: Reject mismatched hash
+CODE: zt_lite_verify()
+TEST: ZTVerificationFailed
+
+REQ: GG-SAF-032
+DES: Lockout on mismatch
+CODE: watchdog_tick()
+TEST: EnvelopeViolation(0)
+
+REQ: GG-SAF-040
+DES: SafetyKernelTimeout
+CODE: elapsed > 3 seconds
+TEST: Simulated delay → SafetyKernelTimeout
+
+REQ: GG-SAF-041
+DES: Slot-based rate limits
+CODE: MIN_SLOTS_BETWEEN_RISK_TICKS
+TEST: Too-soon call → RateLimitExceeded
+
+============================================================
+9. EVENT TRACEABILITY
+============================================================
+
+REQ: GG-EVT-001
+DES: Emit GovernorStateChanged
+CODE: emit_state_changed()
+TEST: Event inspection
+
+REQ: GG-EVT-002
+DES: Emit EnvelopeViolation
+CODE: emit_envelope_violation()
+TEST: Event inspection
+
+============================================================
+10. VERIFICATION TRACEABILITY
+============================================================
+
+REQ: GG-VRF-001
+DES: All requirements testable
+CODE: Entire program
+TEST: Full test suite
+
+REQ: GG-VRF-002
+DES: Each requirement maps to test case
+CODE: Entire program
+TEST: Traceability matrix (this document)
+
+============================================================
+END OF BI-DIRECTIONAL TRACEABILITY MATRIX (BTM)
+============================================================
+
