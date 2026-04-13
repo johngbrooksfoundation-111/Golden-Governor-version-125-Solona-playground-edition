@@ -1,0 +1,228 @@
+============================================================
+SYSTEM ARCHITECTURE DOCUMENT (SAD)
+Golden Governor v125 Light – Solana Playground Edition
+Level A Safety-Critical Architecture
+============================================================
+
+1. SYSTEM OVERVIEW
+------------------------------------------------------------
+System Name: Golden Governor v125 Light
+Domain: On-chain risk governor for leveraged trading strategies
+Platform: Solana Devnet, Anchor Framework, Solana Playground (mobile)
+Assurance Level: Level A (NASA-style deterministic safety)
+
+Mission:
+Golden Governor v125 Light enforces deterministic, on-chain safety
+constraints for a trading strategy’s equity, leverage, drawdown,
+oracle integrity, and temporal sequencing. It acts as a safety kernel
+and gatekeeper for all strategy actions.
+
+Primary Responsibilities:
+- Validate trades against risk envelopes
+- Enforce drawdown thresholds and mode transitions
+- Detect MEV-like behavior and oracle anomalies
+- Enforce withdrawal lock periods
+- Provide controlled recovery from lockout
+- Maintain zero-trust integrity via state hashing
+- Emit state-change and violation events for monitoring
+
+------------------------------------------------------------
+2. SYSTEM CONTEXT AND EXTERNAL INTERFACES
+------------------------------------------------------------
+
+2.1 Actors
+- Strategy Authority (User / Vault Manager / Controller)
+- Solana Runtime (execution environment)
+- Oracle Providers:
+    * Pyth SOL/USD feed (expected pubkey 1)
+    * Secondary feed (expected pubkey 2)
+- Replica / Vault Manager (future integration)
+
+2.2 External Interfaces
+- Clock Sysvar: Provides slot and unix_timestamp
+- Oracle Accounts:
+    * price_update_pyth: AccountInfo
+    * price_update_switchboard: AccountInfo
+- System Program: Used only during initialization
+
+2.3 Context Diagram (Conceptual)
+[Authority] → [Golden Governor Program] → [State PDA]
+[Golden Governor Program] → [Oracle Feeds]
+[Golden Governor Program] → [Clock Sysvar]
+[Replica/Vault Manager] → [Golden Governor Program]
+
+------------------------------------------------------------
+3. HIGH-LEVEL ARCHITECTURAL DECOMPOSITION
+------------------------------------------------------------
+
+3.1 Program Modules
+A. Program Entrypoints (Anchor #[program] module)
+    - initialize
+    - execute_golden_trade
+    - risk_tick
+    - watchdog_tick
+    - withdraw
+    - phoenix_restart
+    - upgrade_policy
+
+B. State Module
+    - GoldenGovernor struct
+    - GovernorMode enum
+    - InitializeParams struct
+
+C. Helper / Safety Kernel Functions
+    - get_pyth_price
+    - zt_lite_verify
+    - compute_integrity_hash
+    - emit_state_changed
+    - emit_envelope_violation
+
+D. Configuration Constants
+    - MAXIMUM_AGE
+    - WITHDRAWAL_LOCK_SECONDS
+    - MIN_SLOTS_BETWEEN_RISK_TICKS
+    - MEV_MAX_PRICE_CHANGE_BPS
+    - CROSS_CHECK_MAX_DIFF_BPS
+    - PHOENIX_COOLDOWN_SECONDS
+    - DEFAULT_MAX_DRAWDOWN_BPS
+    - DEFAULT_MAX_LEVERAGE
+
+------------------------------------------------------------
+4. DATA ARCHITECTURE
+------------------------------------------------------------
+
+4.1 GoldenGovernor State Fields
+Identity & Control:
+- authority: Pubkey
+- policy_version: u8
+- mode: GovernorMode
+
+Risk Envelope:
+- max_leverage: u64
+- max_exposure: u64
+- max_drawdown_bps: u64
+- current_equity: u64
+- peak_equity: u64
+- current_drawdown: u64
+
+Temporal / Sequencing:
+- last_action_slot: u64
+- last_sense_timestamp: i64
+- init_timestamp: i64
+- last_risk_tick_slot: u64
+- lockout_timestamp: i64
+
+Oracle / Market:
+- expected_spread: u64
+- last_price: u64
+
+Integrity / Watchdog:
+- integrity_hash: u64
+- integrity_salt: u64
+- watchdog_nonce: u64
+- strategy_flags: u8
+
+4.2 Integrity Hash Function
+compute_integrity_hash():
+- Deterministically folds critical state fields
+- Uses multiplier 618 (golden-ratio inspired)
+- Protects against unauthorized or corrupted state transitions
+- Verified by zt_lite_verify and watchdog_tick
+
+------------------------------------------------------------
+5. CONTROL AND BEHAVIOR ARCHITECTURE
+------------------------------------------------------------
+
+5.1 Governor Modes
+- Normal: Full operations allowed
+- Degraded: Restricted growth; triggered at ≥50% drawdown
+- Recovering: Only reductions allowed; triggered at ≥75% drawdown or Phoenix restart
+- Lockout: All operations halted except phoenix_restart and upgrade_policy (with allow_lockout)
+
+5.2 Mode Transition Drivers
+- execute_golden_trade:
+    * Computes drawdown
+    * Enforces leverage/exposure
+    * Enforces MEV and slippage bounds
+    * Updates mode and integrity hash
+
+- risk_tick:
+    * Periodic drawdown evaluation
+    * Rate-limited by slots
+    * Updates mode and integrity hash
+
+- watchdog_tick:
+    * Anti-replay nonce
+    * Oracle move bounds (2000 bps)
+    * Integrity hash mismatch detection
+    * Can trigger Lockout
+
+- phoenix_restart:
+    * Lockout → Recovering after cooldown
+
+5.3 Safety Kernel Components
+- Oracle Safety:
+    * Feed pubkey validation
+    * Max age enforcement
+    * Non-negative price
+    * Cross-feed diff bound
+
+- MEV Safety:
+    * Trade-time spike bound
+    * Friction bound using expected_spread * 1.618
+
+- Temporal Safety:
+    * SafetyKernelTimeout
+    * Slot-based rate limiting
+
+- Zero-Trust Integrity:
+    * policy_version check
+    * integrity_hash recomputation and comparison
+
+------------------------------------------------------------
+6. DEPLOYMENT AND ENVIRONMENT ARCHITECTURE
+------------------------------------------------------------
+
+6.1 Target Environment
+- Solana Devnet
+- Solana Playground (mobile)
+- Program ID: HtVHHX7gTJ9bkxBTEQap86crRim7hXww3phpg2S5mnrh
+
+6.2 PDA and Account Model
+Governor PDA:
+- Seeds: [b"governor", user.key()]
+- Space: 8 + GoldenGovernor::LEN
+
+Instruction Constraints:
+- All operational instructions require:
+    * governor PDA with has_one = authority
+    * authority signer
+
+------------------------------------------------------------
+7. SAFETY AND FAILURE MODES
+------------------------------------------------------------
+
+7.1 Designed Safe Failures
+- Oracle failure → SafetyKernelTimeout / OracleFeedIdInvalid
+- Integrity mismatch → ZTVerificationFailed or Lockout
+- Excessive drawdown → Lockout
+- MEV spike → MEVPriceSpike
+- Cross-feed disagreement → OracleCrossCheckFailed
+- Withdrawal before lock → WithdrawalLocked
+- Wrong mode withdrawal → WithdrawalModeViolation
+
+7.2 Non-Tolerated Failures
+- Silent state corruption
+- Unauthorized state mutation
+- Bypass of drawdown or lockout logic
+
+These are prevented by:
+- Integrity hash
+- Mode enforcement
+- Policy version enforcement
+- Oracle and timing constraints
+
+============================================================
+END OF SYSTEM ARCHITECTURE DOCUMENT (SAD)
+============================================================
+
