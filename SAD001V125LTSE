@@ -1,39 +1,116 @@
-============================================================
 SYSTEM ARCHITECTURE DOCUMENT (SAD)
-Golden Governor v125 Light – Solana Playground Edition
-Level A Safety-Critical Architecture
-============================================================
+Golden Governor v1.2.5 Lite + Voltr Vault Manager
+Build‑A‑Bear Hackathon 2026 Submission
+Author: John G. Brooks Foundation / Ranger Finance
+Date: April 16, 2026
 
-1. SYSTEM OVERVIEW
-------------------------------------------------------------
-System Name: Golden Governor v125 Light
-Domain: On-chain risk governor for leveraged trading strategies
-Platform: Solana Devnet, Anchor Framework, Solana Playground (mobile)
-Assurance Level: Level A (NASA-style deterministic safety)
+1. PURPOSE
+This System Architecture Document (SAD) describes the complete technical architecture of the Golden Governor v1.2.5 Lite safety kernel and the Voltr Vault Manager off‑chain orchestrator. It explains how the system enforces a hard 15% maximum drawdown, validates trades, executes fallback liquidation, and maintains deterministic behavior under adversarial conditions.
 
-Mission:
-Golden Governor v125 Light enforces deterministic, on-chain safety
-constraints for a trading strategy’s equity, leverage, drawdown,
-oracle integrity, and temporal sequencing. It acts as a safety kernel
-and gatekeeper for all strategy actions.
+2. SYSTEM OVERVIEW
+The system consists of two cooperating components:
 
-Primary Responsibilities:
-- Validate trades against risk envelopes
-- Enforce drawdown thresholds and mode transitions
-- Detect MEV-like behavior and oracle anomalies
-- Enforce withdrawal lock periods
-- Provide controlled recovery from lockout
-- Maintain zero-trust integrity via state hashing
-- Emit state-change and violation events for monitoring
+2.1 On‑Chain Component — Golden Governor v1.2.5 Lite
+- Enforces 10 independent safety envelopes
+- Enforces a hard 15% drawdown cap
+- Validates every trade against oracle, MEV, leverage, exposure, and timing rules
+- Maintains a mode ladder (Normal → Degraded → Recovering → Lockout)
+- Performs Phoenix Restart after a 2‑hour cooldown
+- Rejects stale or manipulated oracle data
+- Detects integrity tampering via ZT Lite hash folding
 
-------------------------------------------------------------
-2. SYSTEM CONTEXT AND EXTERNAL INTERFACES
-------------------------------------------------------------
+2.2 Off‑Chain Component — Voltr Vault Manager
+- Computes daily yield from 18 strategies
+- Adjusts leverage based on governor mode
+- Submits trades through the governor
+- Implements fallback liquidation at 85% of the drawdown envelope
+- Re‑enters positions after Phoenix cooldown using risk‑reduction logic
+- Calls risk_tick() before every trade to satisfy the 3‑second safety window
 
-2.1 Actors
-- Strategy Authority (User / Vault Manager / Controller)
-- Solana Runtime (execution environment)
-- Oracle Providers:
+3. ARCHITECTURAL GOALS
+1. Bounded Loss Guarantee (max 15%)
+2. Deterministic Behavior
+3. Defense in Depth
+4. Zero‑Trust Execution
+5. Survivability Under Attack
+6. High Yield With Safety
+
+4. ARCHITECTURE DIAGRAM (TEXT)
+Off‑Chain Manager → executeGoldenTrade() → Golden Governor → Safety Envelopes → Mode Ladder → Phoenix Restart
+
+5. ON‑CHAIN ARCHITECTURE
+5.1 Core Constants
+MAXIMUM_AGE = 34 seconds
+DEFAULT_MAX_DRAWDOWN_BPS = 1500 (15%)
+PHOENIX_COOLDOWN_SECONDS = 7200 (2 hours)
+
+5.2 Safety Envelopes (E‑0 through E‑9)
+- ZT Lite Integrity
+- Oracle Age
+- Torque/Slippage
+- Mode Gate
+- Zero Equity
+- Leverage Cap
+- Drawdown Cap
+- Oracle Cross‑Check
+- MEV Detection
+- Watchdog Integrity
+
+5.3 Mode Ladder
+Normal: < 50% DD
+Degraded: 50–75%
+Recovering: 75–100%
+Lockout: ≥ 100%
+
+5.4 Phoenix Restart
+After 2 hours:
+- Mode → Recovering
+- peak_equity = current_equity
+- drawdown = 0
+
+6. OFF‑CHAIN ARCHITECTURE
+6.1 Responsibilities
+- Compute daily yield
+- Determine equity delta
+- Enforce mode‑aware leverage
+- Submit trades through governor
+- Trigger fallback liquidation
+- Re‑enter positions after cooldown
+
+6.2 Fallback Liquidation Layer
+Trigger: drawdown ≥ 85% of 15% cap (12.75%)
+Actions:
+- Full liquidation to USDC
+- Record liquidation price
+- Enter 2‑hour cooldown
+Re‑Entry:
+- Long if price ≤ liquidation price
+- Short if price > liquidation price
+
+7. DATA FLOW
+risk_tick() → compute equityDelta → executeGoldenTrade() → governor validates → state updates → next tick
+
+8. SECURITY ARCHITECTURE
+Zero‑trust model: manager cannot bypass on‑chain safety.
+Resists:
+- Oracle desync
+- MEV sandwiching
+- Replay attacks
+- Admin key compromise
+- Price manipulation
+- State tampering
+
+9. FALLBACK LIQUIDATION ARCHITECTURE
+Trigger: drawdown ≥ 85% of max_drawdown_bps
+Actions: full liquidation, cooldown
+Re‑Entry: long below/at liquidation price, short above
+
+10. DEPLOYMENT ARCHITECTURE
+On‑Chain: Anchor program, PDA governor
+Off‑Chain: Node.js/TypeScript, Pyth + Switchboard
+
+11. CONCLUSION
+This architecture delivers a deterministic, safety‑critical leveraged vault with a hard 15% loss boundary, robust fallback liquidation, and a professional safety kernel. Ready for hackathon submission.
     * Pyth SOL/USD feed (expected pubkey 1)
     * Secondary feed (expected pubkey 2)
 - Replica / Vault Manager (future integration)
