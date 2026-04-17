@@ -1,17 +1,108 @@
-# Golden Governor Lite v1.25 — Deterministic Safety Kernel & Voltr Manager System  
-**Author:** John G. Brooks III  
-**Repository:** Golden-Governor-version-125-Solona-playground-edition  
-**License:** Public, full transparency for hackathon evaluation
+README
+Golden Governor v1.2.5 Lite + Voltr Vault Manager
+Build‑A‑Bear Hackathon 2026 Submission
+Author: John G. Brooks Foundation / Ranger Finance
+Date: April 16, 2026
 
----
+1. OVERVIEW
+This repository contains:
+- Golden Governor v1.2.5 Lite (on‑chain safety kernel, Rust/Anchor)
+- Voltr Vault Manager (off‑chain orchestrator, TypeScript)
+- Fallback liquidation logic
+- Mode‑aware leverage control
+- Zero‑trust, safety‑critical architecture
 
-## Overview
+The system enforces a hard 15% maximum drawdown and uses a 10‑envelope safety kernel to validate every trade.
 
-This repository contains the complete documentation package for the **Golden Governor Lite v1.25 Safety Kernel** and its integrated **Voltr Vault Manager**, **Envelope‑0 GOFAI**, **ML/DML advisory modules**, and the **Deterministic Test Harness** used to validate the entire system.
+2. FEATURES
+- Hard 15% drawdown cap (on‑chain enforced)
+- 10 independent safety envelopes
+- Dual oracle cross‑check (Pyth + Switchboard)
+- MEV spike detection (2% trade‑time, 20% watchdog)
+- 3‑second safety window
+- Phoenix Restart after 2‑hour lockout
+- Fallback liquidation at 85% of DD envelope
+- Risk‑reduction re‑entry logic (long/short)
+- Deterministic yield engine
 
-This repo intentionally contains **no code**.  
-All code is maintained privately.  
-This public repository provides **full architectural transparency**, **complete requirements**, and **full traceability** for hackathon judges and auditors.
+3. FILE STRUCTURE
+/governor/
+    lib.rs (Golden Governor v1.2.5 Lite)
+/manager/
+    voltrManager.ts (off‑chain orchestrator)
+
+4. INSTALLATION
+Prerequisites:
+- Node.js 18+
+- Anchor CLI
+- Solana CLI
+- Yarn or npm
+
+Install dependencies:
+    yarn install
+or
+    npm install
+
+5. RUNNING THE MANAGER
+To execute 10 ticks:
+    ts-node voltrManager.ts
+
+The manager:
+- Fetches governor state
+- Calls risk_tick()
+- Computes yield
+- Applies mode‑aware leverage
+- Executes trades through executeGoldenTrade()
+- Triggers fallback liquidation when needed
+
+6. FALLBACK LIQUIDATION LOGIC
+Trigger:
+    drawdown ≥ 85% of max_drawdown_bps (12.75% for 15% cap)
+
+Actions:
+- Full liquidation to USDC
+- Record liquidation price
+- Enter 7200‑second cooldown
+
+Re‑Entry:
+- Long if price < liquidation price
+- Long if price = liquidation price
+- Short if price > liquidation price
+
+7. GOVERNOR SAFETY ENVELOPES
+E‑0 Integrity Hash
+E‑1 Oracle Age ≤ 34s
+E‑2 Torque/Slippage ≤ spread × 1.618
+E‑3 Mode Gate
+E‑4 Zero Equity
+E‑5 Leverage Cap ≤ 13x
+E‑6 Exposure Cap
+E‑7 Drawdown Cap 15%
+E‑8 Oracle Cross‑Check ≤ 50 bps
+E‑9 MEV Spike ≤ 2%
+
+8. MODE LADDER
+Normal: < 50% DD
+Degraded: 50–75%
+Recovering: 75–100%
+Lockout: ≥ 100%
+
+9. PHOENIX RESTART
+After 7200 seconds in Lockout:
+- Mode → Recovering
+- peak_equity = current_equity
+- drawdown = 0
+
+10. DEVELOPMENT NOTES
+- All arithmetic on‑chain uses checked math.
+- No floating‑point operations on‑chain.
+- Manager must call risk_tick() before every trade.
+- Manager must halt trading during Lockout.
+
+11. DISCLAIMER
+This is a hackathon demo. Not production code. No financial advice.
+
+END OF README
 
 The system is designed to demonstrate:
 
